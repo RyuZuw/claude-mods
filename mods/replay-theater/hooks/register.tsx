@@ -404,8 +404,12 @@ async function panel($: any, e: any) {
 
           return (
             <Button key={`h${r.turn}`} plain onPress={() => update($, folded, l => (l.includes(r.turn) ? l.filter(x => x !== r.turn) : [...l, r.turn]))}>
-              <Text bold dimColor wrap="truncate-end">
-                {`${isShut ? '▸' : '▾'} ${r.head ? `“${r.head}”` : '(no prompt)'}${r.size > 1 ? ` · ${r.size} changes` : ''}`}
+              <Text bold color="claude">
+                {isShut ? '▸' : '▾'}
+              </Text>
+              {GAP}
+              <Text bold color="claude" wrap="truncate-end">
+                {`${r.turn >= 0 ? `You: “${r.head || '(no text)'}”` : 'Before Replay Theater started'}${r.size > 1 || isShut ? ` · ${r.size} ${r.size === 1 ? 'change' : 'changes'}` : ''}`}
               </Text>
             </Button>
           )
@@ -416,6 +420,7 @@ async function panel($: any, e: any) {
 
         return (
           <Button key={c.id} plain onPress={() => update($, sel, () => (r.idx === 0 ? '' : c.id))}>
+            <Text>{'   '}</Text>
             <Text color={TINT[c.cat]}>{on ? '▸' : '●'}</Text>
             {GAP}
             <Text dimColor>{String(total - r.idx).padStart(2)}</Text>

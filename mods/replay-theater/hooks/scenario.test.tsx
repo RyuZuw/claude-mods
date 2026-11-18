@@ -144,7 +144,7 @@ test('grouping: changes sit under the prompt that caused them', async ($, on) =>
   await withFile($, on, 'make the notes better')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /make the notes better/)).toMatch(/“make the notes better”$/)
+  expect(await text(ui, /make the notes better/)).toBe('You: “make the notes better”')
   await ui.unmount()
 })
 
