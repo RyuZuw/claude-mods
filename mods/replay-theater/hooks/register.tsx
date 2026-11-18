@@ -241,21 +241,27 @@ async function panel($: any, e: any) {
   const header = (
     <Box flexDirection="row" flexWrap="wrap" gap={2}>
       <Text bold>{plural(all.length)}</Text>
+      {total !== all.length && <Text dimColor>{`${total} shown`}</Text>}
       <Text color="success">{`+${sums.add}`}</Text>
       <Text color="error">{`-${sums.del}`}</Text>
-      {total > 0 && <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}`}</Text>}
       {isPaused && <Text color="warning">⏸ paused</Text>}
     </Box>
   )
 
   const chips = (
-    <Box flexDirection="row" flexWrap="wrap" gap={1}>
+    <Box flexDirection="row" flexWrap="wrap" gap={2}>
       {CATS.filter(c => n[c]).map(c => (
-        <Button key={c} label={`${hidden.includes(c) ? '○' : '●'} ${c} ${n[c]}`} onPress={() => toggleCat(c)} />
+        <Button key={c} plain onPress={() => toggleCat(c)}>
+          <Text color={hidden.includes(c) ? undefined : TINT[c]} dimColor={hidden.includes(c)}>{`${hidden.includes(c) ? '○' : '●'} ${c} ${n[c]}`}</Text>
+        </Button>
       ))}
-      <Button key="pause" label={isPaused ? '▶ Resume' : '⏸ Pause'} onPress={() => update($, paused, v => !v)} />
+      <Button key="pause" plain onPress={() => update($, paused, v => !v)}>
+        <Text dimColor>{isPaused ? '▶ Resume' : '⏸ Pause'}</Text>
+      </Button>
     </Box>
   )
+
+  const rule = <Text dimColor>{'─'.repeat(Math.max(10, Math.min(e.props.bodyColumns ?? 60, 200)))}</Text>
 
   if (!total) {
     return (
@@ -270,7 +276,8 @@ async function panel($: any, e: any) {
   const step = order[k]!
   const { add, del } = tally(step)
   const slash = step.file.lastIndexOf('/')
-  const dir = slash > 0 ? step.file.slice(0, slash) : ''
+  const parts = slash > 0 ? step.file.slice(0, slash).split('/') : []
+  const dir = parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : parts.join('/')
   const name = slash >= 0 ? step.file.slice(slash + 1) : step.file
 
   // A window of the list around the current step: tall beside the diff, short above it.
@@ -278,7 +285,7 @@ async function panel($: any, e: any) {
   const from = Math.max(0, Math.min(k - Math.floor(size / 2), total - size))
   const to = Math.min(total, from + size)
   const list = (
-    <Box flexDirection="column" borderStyle="round" borderColor="inactive" paddingX={1} {...(isWide ? { width: 34 } : {})}>
+    <Box flexDirection="column" {...(isWide ? { width: 34 } : {})}>
       {order.slice(from, to).map((c, j) => {
         const idx = from + j
         const t = tally(c)
@@ -305,7 +312,7 @@ async function panel($: any, e: any) {
   )
 
   const detail = (
-    <Box flexDirection="column" flexGrow={1} borderStyle="round" borderColor="inactive" paddingX={1}>
+    <Box flexDirection="column" flexGrow={1}>
       {dir && (
         <Text dimColor wrap="truncate-start">
           {dir}
@@ -315,6 +322,7 @@ async function panel($: any, e: any) {
         {name}
       </Text>
       <Box flexDirection="row" flexWrap="wrap" gap={2}>
+        <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}`}</Text>
         <Text color={TINT[step.cat]}>{step.cat}</Text>
         <Text dimColor>{`${step.tool}${step.note ? ` · ${step.note}` : ''}`}</Text>
         <Text color="success">{`+${add}`}</Text>
@@ -322,7 +330,7 @@ async function panel($: any, e: any) {
       </Box>
       <Box flexDirection="column" marginTop={1}>
         {step.lines.map(l => (
-          <Box backgroundColor={l.op === '+' ? 'diffAdded' : l.op === '-' ? 'diffRemoved' : undefined}>
+          <Box backgroundColor={l.op === '+' ? 'diffAddedDimmed' : l.op === '-' ? 'diffRemovedDimmed' : undefined}>
             <Text dimColor={l.op === ' ' || l.op === '~' || l.op === '>'} wrap="wrap">
               {`${l.op === '~' ? ' ' : l.op} ${l.t}`}
             </Text>
@@ -334,23 +342,26 @@ async function panel($: any, e: any) {
   )
 
   return (
-    <Box flexDirection="column" gap={1}>
+    <Box flexDirection="column">
       {header}
       {chips}
+      {rule}
       {isWide ? (
-        <Box flexDirection="row" gap={1}>
+        <Box flexDirection="row" gap={2}>
           {list}
           {detail}
         </Box>
       ) : (
         <Box flexDirection="column" gap={1}>
           {list}
+          {rule}
           {detail}
         </Box>
       )}
-      <Box flexDirection="row" flexWrap="wrap" gap={2}>
-        <Button key="newer" label="▲ Newer" hotkey="n" onPress={() => update($, sel, () => (k <= 1 ? '' : order[k - 1]!.id))} />
-        <Button key="older" label="▼ Older" hotkey="o" autoFocus onPress={() => update($, sel, () => order[Math.min(total - 1, k + 1)]!.id)} />
+      {rule}
+      <Box flexDirection="row" flexWrap="wrap" gap={3}>
+        <Button key="newer" plain hotkey="n" label="▲ Newer" onPress={() => update($, sel, () => (k <= 1 ? '' : order[k - 1]!.id))} />
+        <Button key="older" plain hotkey="o" label="▼ Older" autoFocus onPress={() => update($, sel, () => order[Math.min(total - 1, k + 1)]!.id)} />
       </Box>
     </Box>
   )
