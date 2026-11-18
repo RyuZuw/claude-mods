@@ -242,6 +242,10 @@ async function openOnce($: any) {
 // written too, so colour never carries it alone.
 const TINT: Record<string, string> = { Studio: 'suggestion', Blender: 'warning', Vault: 'remember', Scripts: 'permission', Other: 'inactive' }
 
+// A prompt heading is a filled band; fixed colours, not theme ones, so it reads on any theme.
+const BAND = '#3b4252'
+const ON_BAND = '#ffffff'
+
 const tally = (c: Change) => ({ add: c.lines.filter(l => l.op === '+').length, del: c.lines.filter(l => l.op === '-').length })
 
 // Opens the panel on one step (from the button under a tool call in the chat).
@@ -403,15 +407,13 @@ async function panel($: any, e: any) {
           const isShut = shut.includes(r.turn)
 
           return (
-            <Button key={`h${r.turn}`} plain onPress={() => update($, folded, l => (l.includes(r.turn) ? l.filter(x => x !== r.turn) : [...l, r.turn]))}>
-              <Text bold color="claude">
-                {isShut ? '▸' : '▾'}
-              </Text>
-              {GAP}
-              <Text bold color="claude" wrap="truncate-end">
-                {`${r.turn >= 0 ? `You: “${r.head || '(no text)'}”` : 'Before Replay Theater started'}${r.size > 1 || isShut ? ` · ${r.size} ${r.size === 1 ? 'change' : 'changes'}` : ''}`}
-              </Text>
-            </Button>
+            <Box flexDirection="row" backgroundColor={BAND}>
+              <Button key={`h${r.turn}`} plain onPress={() => update($, folded, l => (l.includes(r.turn) ? l.filter(x => x !== r.turn) : [...l, r.turn]))}>
+                <Text bold color={ON_BAND} wrap="truncate-end">
+                  {` ${isShut ? '▸' : '▾'} ${r.size} ${r.size === 1 ? 'change' : 'changes'} · ${r.turn >= 0 ? `You: “${r.head || '(no text)'}”` : 'before Replay Theater started'}`}
+                </Text>
+              </Button>
+            </Box>
           )
         }
         const c = order[r.idx]!
@@ -420,7 +422,8 @@ async function panel($: any, e: any) {
 
         return (
           <Button key={c.id} plain onPress={() => update($, sel, () => (r.idx === 0 ? '' : c.id))}>
-            <Text>{'   '}</Text>
+            <Text dimColor>│</Text>
+            {GAP}
             <Text color={TINT[c.cat]}>{on ? '▸' : '●'}</Text>
             {GAP}
             <Text dimColor>{String(total - r.idx).padStart(2)}</Text>
@@ -496,6 +499,8 @@ async function panel($: any, e: any) {
         <Button key="newer" plain hotkey="n" label="▲ Newer" onPress={() => update($, sel, () => (k <= 1 ? '' : order[k - 1]!.id))} />
         <Button key="older" plain hotkey="o" label="▼ Older" autoFocus onPress={() => update($, sel, () => order[Math.min(total - 1, k + 1)]!.id)} />
         {!live && <Button key="live" plain hotkey="l" label="⏭ Latest" onPress={() => update($, sel, () => '')} />}
+      </Box>
+      <Box flexDirection="row" flexWrap="wrap" gap={3} marginTop={1}>
         <Button key="ctx" plain hotkey="c" label={withContext ? 'Context: on' : 'Context: off'} onPress={() => update($, context, v => !v)} />
         {!asking && <Button key="clear" plain hotkey="x" label="✕ Clear" onPress={() => update($, confirmClear, () => true)} />}
         {asking && <Text color="warning">{`Clear all ${all.length}?`}</Text>}

@@ -144,7 +144,7 @@ test('grouping: changes sit under the prompt that caused them', async ($, on) =>
   await withFile($, on, 'make the notes better')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /make the notes better/)).toBe('You: “make the notes better”')
+  expect(await text(ui, /make the notes better/)).toMatch(/ 1 change · You: “make the notes better”$/)
   await ui.unmount()
 })
 
@@ -152,7 +152,7 @@ test('grouping: paste wrappers are stripped from the heading', async ($, on) => 
   await withFile($, on, '<pasted_content id="c001">\nfix the lobby sign\n</pasted_content>')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'p1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /lobby sign/)).toMatch(/“fix the lobby sign”$/)
+  expect(await text(ui, /lobby sign/)).toMatch(/You: “fix the lobby sign”$/)
   await ui.unmount()
 })
 
@@ -179,7 +179,7 @@ test('a long temp path is shortened and a group shows its size', async ($, on) =
   await $.tool.call({ tool: 'Edit', tool_use_id: 'd2', file_path: long, old_string: 'fifth line', new_string: 'Y' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await text(ui, /^…\/claude\/scratchpad$/)).toBe('…/claude/scratchpad')
-  expect(await text(ui, /tidy up/)).toMatch(/“tidy up” · 2 changes$/)
+  expect(await text(ui, /tidy up/)).toMatch(/ 2 changes · You: “tidy up”$/)
   await ui.unmount()
 })
 
