@@ -246,6 +246,18 @@ async function reveal($: any, id: string) {
   await $.ui.open({ id: PANE, title: 'Replay Theater', focus: true as const, closeOnEscape: true as const })
 }
 
+// The first real words of a prompt: paste wrappers and other tags are dropped.
+function askLine(text: string): string {
+  const line = text
+    .replace(/<[^>\n]*>/g, '')
+    .split('\n')
+    .map(l => l.trim())
+    .find(Boolean)
+  if (line) return line.slice(0, 80)
+
+  return /<pasted_content/.test(text) ? '(pasted text)' : '(attachment)'
+}
+
 // A tool call that was recorded gets a small button under its row that opens its step.
 async function jump($: any, e: any, next: any) {
   const row = await next(e)
@@ -304,7 +316,12 @@ async function panel($: any, e: any) {
     </Box>
   )
 
-  const rule = <Text dimColor>{'─'.repeat(Math.max(10, Math.min(e.props.bodyColumns ?? 60, 200)))}</Text>
+  // Longer than any panel, clipped to its width: a rule sized to bodyColumns wrapped.
+  const rule = (
+    <Text dimColor wrap="truncate-end">
+      {'─'.repeat(200)}
+    </Text>
+  )
 
   if (!total) {
     return (
@@ -358,7 +375,7 @@ async function panel($: any, e: any) {
             {GAP}
             <Text dimColor>{String(total - r.idx).padStart(2)}</Text>
             {GAP}
-            <Text bold={on} inverse={on} wrap="truncate-end">
+            <Text bold={on} dimColor={!on} wrap="truncate-end">
               {c.file.split('/').pop() ?? c.file}
             </Text>
             {GAP}
@@ -479,8 +496,7 @@ export const register: Register = on => {
   // prompts the engine sends itself are not asks.
   on('prompt.submit', async ($, e, next) => {
     if (!e.command && !e.isMeta && e.text.trim()) {
-      const line = e.text.trim().split('\n')[0]!.slice(0, 80)
-      await update($, prompts, l => [...l, line].slice(-200))
+      await update($, prompts, l => [...l, askLine(e.text)].slice(-200))
     }
 
     return next(e)

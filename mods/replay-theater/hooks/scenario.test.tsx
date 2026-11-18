@@ -145,3 +145,19 @@ test('grouping: changes sit under the prompt that caused them', async ($, on) =>
   expect(await text(ui, /make the notes better/)).toBe('“make the notes better”')
   await ui.unmount()
 })
+
+test('grouping: paste wrappers are stripped from the heading', async ($, on) => {
+  await withFile($, on, '<pasted_content id="c001">\nfix the lobby sign\n</pasted_content>')
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'p1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /lobby sign/)).toBe('“fix the lobby sign”')
+  await ui.unmount()
+})
+
+test('grouping: a prompt that is only a paste reads as pasted text', async ($, on) => {
+  await withFile($, on, '<pasted_content id="c001">')
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'p2', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /pasted text/)).toBe('“(pasted text)”')
+  await ui.unmount()
+})
