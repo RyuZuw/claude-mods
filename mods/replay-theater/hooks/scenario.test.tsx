@@ -125,7 +125,7 @@ async function withFile($: any, on: any, prompt?: string) {
 
 test('context: an edit shows three lines each side with real line numbers', async ($, on) => {
   await withFile($, on)
-  await $.tool.call({ tool: 'Edit', tool_use_id: 'e1', file_path: 'C:\game\notes.md', old_string: 'TARGET line', new_string: 'CHANGED line\nextra' })
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'e1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'CHANGED line\nextra' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
   // Lines 2 to 4 above and 6 to 8 below the changed line 5, none from further away.
@@ -135,12 +135,14 @@ test('context: an edit shows three lines each side with real line numbers', asyn
   expect(await text(ui, /eighth line/)).toBeUndefined()
   expect(await text(ui, /^# Notes/)).toBeUndefined()
   expect(await text(ui, /^5$/)).toBe('5')
+  // The list row says where in the file the change is.
+  expect(await text(ui, /^notes\.md:5$/)).toBe('notes.md:5')
   await ui.unmount()
 })
 
 test('grouping: changes sit under the prompt that caused them', async ($, on) => {
   await withFile($, on, 'make the notes better')
-  await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\game\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await text(ui, /make the notes better/)).toBe('“make the notes better”')
   await ui.unmount()
@@ -167,5 +169,16 @@ test('a step shows the time it happened', async ($, on) => {
   await $.tool.call({ tool: 'Edit', tool_use_id: 't1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await text(ui, /step 1 of 1 · live · \d\d:\d\d/)).toMatch(/· \d\d:\d\d$/)
+  await ui.unmount()
+})
+
+test('a long temp path is shortened and a group shows its size', async ($, on) => {
+  await withFile($, on, 'tidy up')
+  const long = 'C:\\Users\\x\\Temp\\claude\\d82316f84d96149e\\c2c8f298-ecaa-49c7-b6db-361237900bba\\scratchpad\\a.md'
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'd1', file_path: long, old_string: 'TARGET line', new_string: 'X' })
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'd2', file_path: long, old_string: 'fifth line', new_string: 'Y' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /^…\/claude\/scratchpad$/)).toBe('…/claude/scratchpad')
+  expect(await text(ui, /tidy up/)).toBe('“tidy up” · 2 changes')
   await ui.unmount()
 })

@@ -253,6 +253,23 @@ const clock = (ms: number) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+// A folder path as short as is still useful: random ids (a temp folder's) are dropped
+// and only the last two folders stay.
+const looksLikeId = (seg: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(seg) || /^[0-9a-f]{12,}$/i.test(seg)
+function tidyDir(dir: string): string {
+  const parts = dir ? dir.split('/') : []
+  const kept = parts.filter(p => !looksLikeId(p))
+
+  return kept.length > 2 || kept.length < parts.length ? `…/${kept.slice(-2).join('/')}` : kept.join('/')
+}
+
+// The first line of a step that really changed, when the file's line numbers are known.
+function firstChanged(c: Change): number {
+  if (/new file|rewrite/.test(c.note)) return 0
+
+  return c.lines.find(l => l.n && l.op !== ' ' && l.op !== '~')?.n ?? 0
+}
+
 // The first real words of a prompt: paste wrappers and other tags are dropped.
 function askLine(text: string): string {
   const line = text
@@ -343,8 +360,7 @@ async function panel($: any, e: any) {
   const step = order[k]!
   const { add, del } = tally(step)
   const slash = step.file.lastIndexOf('/')
-  const parts = slash > 0 ? step.file.slice(0, slash).split('/') : []
-  const dir = parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : parts.join('/')
+  const dir = slash > 0 ? tidyDir(step.file.slice(0, slash)) : ''
   const name = slash >= 0 ? step.file.slice(slash + 1) : step.file
   // Width of the line-number gutter; 0 when this step has no numbers (a Studio call, say).
   const digits = Math.max(0, ...step.lines.map(l => (l.n ? String(l.n).length : 0)))
@@ -352,9 +368,12 @@ async function panel($: any, e: any) {
   // The list groups the steps under what you asked, newest first. A window of its rows
   // around the current step: tall beside the diff, short above it.
   const asks = await read($, prompts)
-  const rows: ({ head: string } | { idx: number })[] = []
+  const perTurn = new Map<number, number>()
+  for (const c of order) perTurn.set(c.turn, (perTurn.get(c.turn) ?? 0) + 1)
+  const rows: ({ head: string; size: number } | { idx: number })[] = []
   order.forEach((c, idx) => {
-    if (idx === 0 || c.turn !== order[idx - 1]!.turn) rows.push({ head: c.turn >= 0 ? (asks[c.turn] ?? '') : 'before Replay Theater started' })
+    if (idx === 0 || c.turn !== order[idx - 1]!.turn)
+      rows.push({ head: c.turn >= 0 ? (asks[c.turn] ?? '') : 'before Replay Theater started', size: perTurn.get(c.turn) ?? 0 })
     rows.push({ idx })
   })
   const here = rows.findIndex(r => 'idx' in r && r.idx === k)
@@ -368,7 +387,7 @@ async function panel($: any, e: any) {
         if ('head' in r) {
           return (
             <Text bold dimColor wrap="truncate-end">
-              {r.head ? `“${r.head}”` : '(no prompt)'}
+              {`${r.head ? `“${r.head}”` : '(no prompt)'}${r.size > 1 ? ` · ${r.size} changes` : ''}`}
             </Text>
           )
         }
@@ -383,8 +402,9 @@ async function panel($: any, e: any) {
             <Text dimColor>{String(total - r.idx).padStart(2)}</Text>
             {GAP}
             <Text bold={on} dimColor={!on} wrap="truncate-end">
-              {c.file.split('/').pop() ?? c.file}
+              {`${c.file.split('/').pop() ?? c.file}${firstChanged(c) ? `:${firstChanged(c)}` : ''}`}
             </Text>
+            {c.note.includes('failed') && <Text color="warning"> ✗</Text>}
             {GAP}
             <Text color="success">{`+${t.add}`}</Text>
             {GAP}
@@ -406,13 +426,13 @@ async function panel($: any, e: any) {
       <Text bold wrap="truncate-start">
         {name}
       </Text>
-      <Box flexDirection="row" flexWrap="wrap" gap={2}>
-        <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}${step.at ? ` · ${clock(step.at)}` : ''}`}</Text>
+      <Box flexDirection="row" flexWrap="wrap" gap={1}>
         <Text color={TINT[step.cat]}>{step.cat}</Text>
-        <Text dimColor>{`${step.tool}${step.note ? ` · ${step.note}` : ''}`}</Text>
+        <Text dimColor>{`· ${step.tool}${step.note ? ` · ${step.note}` : ''}`}</Text>
         <Text color="success">{`+${add}`}</Text>
         <Text color="error">{`-${del}`}</Text>
       </Box>
+      <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}${step.at ? ` · ${clock(step.at)}` : ''}`}</Text>
       <Box flexDirection="column" marginTop={1}>
         {step.lines.map(l => (
           <Box backgroundColor={l.op === '+' ? 'diffAddedDimmed' : l.op === '-' ? 'diffRemovedDimmed' : undefined}>
@@ -448,8 +468,7 @@ async function panel($: any, e: any) {
           {detail}
         </Box>
       )}
-      {rule}
-      <Box flexDirection="row" flexWrap="wrap" gap={3}>
+      <Box flexDirection="row" flexWrap="wrap" gap={3} marginTop={1}>
         <Button key="newer" plain hotkey="n" label="▲ Newer" onPress={() => update($, sel, () => (k <= 1 ? '' : order[k - 1]!.id))} />
         <Button key="older" plain hotkey="o" label="▼ Older" autoFocus onPress={() => update($, sel, () => order[Math.min(total - 1, k + 1)]!.id)} />
       </Box>
