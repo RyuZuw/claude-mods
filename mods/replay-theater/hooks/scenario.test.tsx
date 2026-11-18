@@ -106,3 +106,42 @@ test('mock session: a tool call that was not recorded gets no button', async ($,
   expect(await row.find({ type: 'Button', text: /Replay/ })).toBeUndefined()
   await row.unmount()
 })
+
+const FILE = ['# Notes', 'intro line', 'second line', 'third line', 'TARGET line', 'fifth line', 'sixth line', 'seventh line', 'eighth line'].join('\n')
+
+async function withFile($: any, on: any, prompt?: string) {
+  on('command.register', () => ({ value: { command: 'replay' } }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'C:\game' }))
+  on('tool.run', () => ({ result: {} }))
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.exists', () => ({ value: true }))
+  on('fs.read', () => ({ value: FILE }))
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  await $.session.start({ cwd: 'C:\game', surface: 'desktop', isInteractive: true })
+  if (prompt) await $.prompt.submit({ text: prompt })
+}
+
+test('context: an edit shows three lines each side with real line numbers', async ($, on) => {
+  await withFile($, on)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'e1', file_path: 'C:\game\notes.md', old_string: 'TARGET line', new_string: 'CHANGED line\nextra' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+
+  // Lines 2 to 4 above and 6 to 8 below the changed line 5, none from further away.
+  expect(await text(ui, /^\+ extra$/)).toBe('+ extra')
+  expect(await text(ui, /^ {2}intro line$/)).toBe('  intro line')
+  expect(await text(ui, /^ {2}seventh line$/)).toBe('  seventh line')
+  expect(await text(ui, /eighth line/)).toBeUndefined()
+  expect(await text(ui, /^# Notes/)).toBeUndefined()
+  expect(await text(ui, /^5$/)).toBe('5')
+  await ui.unmount()
+})
+
+test('grouping: changes sit under the prompt that caused them', async ($, on) => {
+  await withFile($, on, 'make the notes better')
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\game\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /make the notes better/)).toBe('“make the notes better”')
+  await ui.unmount()
+})

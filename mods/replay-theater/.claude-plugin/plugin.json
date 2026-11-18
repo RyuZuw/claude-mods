@@ -1,6 +1,6 @@
 {
   "name": "replay-theater",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Replay Theater: a side panel that steps through every change Claude made this session (files, Roblox Studio, Blender), newest first, with category toggles.",
   "author": { "name": "RyuZuw" },
   "license": "MIT",
