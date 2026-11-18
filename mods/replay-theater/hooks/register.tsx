@@ -245,6 +245,8 @@ const TINT: Record<string, string> = { Studio: 'suggestion', Blender: 'warning',
 // A prompt heading is a filled band; fixed colours, not theme ones, so it reads on any theme.
 const BAND = '#3b4252'
 const ON_BAND = '#ffffff'
+// The step on show is a filled bar in the list, so it can't be mistaken for a fold arrow or a dot.
+const PICK = '#2f5d8c'
 
 const tally = (c: Change) => ({ add: c.lines.filter(l => l.op === '+').length, del: c.lines.filter(l => l.op === '-').length })
 
@@ -421,22 +423,28 @@ async function panel($: any, e: any) {
         const on = r.idx === k
 
         return (
-          <Button key={c.id} plain onPress={() => update($, sel, () => (r.idx === 0 ? '' : c.id))}>
-            <Text dimColor>│</Text>
-            {GAP}
-            <Text color={TINT[c.cat]}>{on ? '▸' : '●'}</Text>
-            {GAP}
-            <Text dimColor>{String(total - r.idx).padStart(2)}</Text>
-            {GAP}
-            <Text bold={on} dimColor={!on} wrap="truncate-end">
-              {`${c.file.split('/').pop() ?? c.file}${firstChanged(c) ? `:${firstChanged(c)}` : ''}`}
-            </Text>
-            {c.note.includes('failed') && <Text color="warning"> ✗</Text>}
-            {GAP}
-            <Text color="success">{`+${t.add}`}</Text>
-            {GAP}
-            <Text color="error">{`-${t.del}`}</Text>
-          </Button>
+          <Box backgroundColor={on ? PICK : undefined}>
+            <Button key={c.id} plain onPress={() => update($, sel, () => (r.idx === 0 ? '' : c.id))}>
+              <Text dimColor={!on} color={on ? ON_BAND : undefined}>
+                │
+              </Text>
+              {GAP}
+              <Text color={TINT[c.cat]}>●</Text>
+              {GAP}
+              <Text dimColor={!on} color={on ? ON_BAND : undefined}>
+                {String(total - r.idx).padStart(2)}
+              </Text>
+              {GAP}
+              <Text bold={on} dimColor={!on} color={on ? ON_BAND : undefined} wrap="truncate-end">
+                {`${c.file.split('/').pop() ?? c.file}${firstChanged(c) ? `:${firstChanged(c)}` : ''}`}
+              </Text>
+              {c.note.includes('failed') && <Text color="warning"> ✗</Text>}
+              {GAP}
+              <Text color="success">{`+${t.add}`}</Text>
+              {GAP}
+              <Text color="error">{`-${t.del}`}</Text>
+            </Button>
+          </Box>
         )
       })}
       {rows.length > size && <Text dimColor>{`${from > 0 ? '▲ newer' : ''}${from > 0 && to < rows.length ? ' · ' : ''}${to < rows.length ? '▼ older' : ''}`}</Text>}
