@@ -1,0 +1,12 @@
+{
+  "name": "claude-mods",
+  "owner": { "name": "RyuZuw" },
+  "description": "Mods for the Claude Code desktop app.",
+  "plugins": [
+    {
+      "name": "replay-theater",
+      "source": "./mods/replay-theater",
+      "description": "A side panel that steps through every change Claude made this session (files, Roblox Studio, Blender), newest first, with category toggles."
+    }
+  ]
+}
