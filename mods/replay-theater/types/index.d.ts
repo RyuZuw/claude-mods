@@ -6,6 +6,7 @@ export type Change = {
   file: string
   note: string
   turn: number
+  at: number
   lines: Line[]
 }
 

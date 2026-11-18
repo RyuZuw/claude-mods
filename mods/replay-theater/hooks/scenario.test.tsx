@@ -55,7 +55,7 @@ test('mock session: five changes, the reads are left out, newest on show', async
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
   expect(await text(ui, /changes?$/)).toBe('5 changes')
-  expect(await text(ui, /step \d+ of/)).toBe('step 5 of 5 · live')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 5\ of\ 5\ ·\ live( · \d\d:\d\d)?$/)
   // The newest step is the Blender call.
   expect(await text(ui, /^execute_blender_code$/)).toBe('execute_blender_code')
   await ui.unmount()
@@ -66,14 +66,14 @@ test('mock session: older, newer and a click on a step', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
   await ui.press({ plugin: 'replay-theater', key: 'older' })
-  expect(await text(ui, /step \d+ of/)).toBe('step 4 of 5')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 4\ of\ 5( · \d\d:\d\d)?$/)
   await ui.press({ plugin: 'replay-theater', key: 'u2' }) // click step 2 in the list
-  expect(await text(ui, /step \d+ of/)).toBe('step 2 of 5')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 2\ of\ 5( · \d\d:\d\d)?$/)
   expect(await text(ui, /^build\.py$/)).toBe('build.py')
   expect(await text(ui, /^tools$/)).toBe('tools')
   // Newer from step 2 goes to step 3; the newest step follows live again.
   await ui.press({ plugin: 'replay-theater', key: 'newer' })
-  expect(await text(ui, /step \d+ of/)).toBe('step 3 of 5')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 3\ of\ 5( · \d\d:\d\d)?$/)
   await ui.unmount()
 })
 
@@ -82,10 +82,10 @@ test('mock session: a category toggle hides its steps and counts', async ($, on)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
   await ui.press({ plugin: 'replay-theater', key: 'Studio' }) // hide the two Studio steps
-  expect(await text(ui, /step \d+ of/)).toBe('step 3 of 3 · live')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 3\ of\ 3\ ·\ live( · \d\d:\d\d)?$/)
   expect((await ui.find({ type: 'Button', text: /○ Studio 2/ }))).toBeDefined()
   await ui.press({ plugin: 'replay-theater', key: 'Studio' }) // and show them again
-  expect(await text(ui, /step \d+ of/)).toBe('step 5 of 5 · live')
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 5\ of\ 5\ ·\ live( · \d\d:\d\d)?$/)
   await ui.unmount()
 })
 
@@ -96,7 +96,7 @@ test('mock session: the button under a tool call opens the panel on that step', 
   await row.unmount()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /step \d+ of/)).toBe('step 2 of 5') // not live: it stays on u2
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step\ 2\ of\ 5( · \d\d:\d\d)?$/) // not live: it stays on u2
   await ui.unmount()
 })
 
@@ -159,5 +159,22 @@ test('grouping: a prompt that is only a paste reads as pasted text', async ($, o
   await $.tool.call({ tool: 'Edit', tool_use_id: 'p2', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await text(ui, /pasted text/)).toBe('“(pasted text)”')
+  await ui.unmount()
+})
+
+test('word highlight: only the changed words of a similar line are marked', async ($, on) => {
+  await withFile($, on)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'w1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'TARGET line (edited)' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const marked = await ui.find({ type: 'Text', text: /^ \(edited\)$/ })
+  expect(marked).toBeDefined()
+  await ui.unmount()
+})
+
+test('a step shows the time it happened', async ($, on) => {
+  await withFile($, on)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 't1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /step 1 of 1 · live · \d\d:\d\d/)).toMatch(/· \d\d:\d\d$/)
   await ui.unmount()
 })

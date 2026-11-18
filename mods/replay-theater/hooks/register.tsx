@@ -20,7 +20,7 @@ const HIDE_KEYS = new Set(['studio_id', 'datamodel_type', 'tool', 'tool_use_id',
 
 // Change the tag when a Change's fields change: it declines what an earlier
 // version stored, which outlives a reload.
-const changes = atom({ plugin: 'replay-theater', key: 'changes' } as const, [], { shape: 'changes-2' })
+const changes = atom({ plugin: 'replay-theater', key: 'changes' } as const, [], { shape: 'changes-3' })
 // What you typed at each turn, oldest first; a change keeps the index of its turn.
 const prompts = atom({ plugin: 'replay-theater', key: 'prompts' } as const, [])
 const off = atom({ plugin: 'replay-theater', key: 'off' } as const, [])
@@ -186,7 +186,7 @@ async function toChange($: any, e: any, before: string, ran: any, turn: number):
       lines = diff(before, e.content, 1)
       note.push(before ? 'rewrite' : 'new file')
     }
-    return { id: e.tool_use_id, cat: category(e.tool, file), tool: e.tool, file, note: note.join(' · '), turn, lines: cap(lines) }
+    return { id: e.tool_use_id, cat: category(e.tool, file), tool: e.tool, file, note: note.join(' · '), turn, at: Date.now(), lines: cap(lines) }
   }
 
   if (!String(e.tool).startsWith('mcp__') || ran.isReadOnly || READ_ONLY.test(e.tool)) return null
@@ -197,11 +197,11 @@ async function toChange($: any, e: any, before: string, ran: any, turn: number):
   if (e.tool.endsWith('__multi_edit') && Array.isArray(e.edits)) {
     if (ran.isError) return null
     if (e.className) note.push('new script')
-    return { id: e.tool_use_id, cat, tool: short, file: String(e.file_path ?? ''), note: note.join(' · '), turn, lines: cap(joinEdits(e.edits)) }
+    return { id: e.tool_use_id, cat, tool: short, file: String(e.file_path ?? ''), note: note.join(' · '), turn, at: Date.now(), lines: cap(joinEdits(e.edits)) }
   }
 
   if (ran.isError) note.push('failed')
-  return { id: e.tool_use_id, cat, tool: short, file: short, note: note.join(' · '), turn, lines: cap(preview(e, ran.text)) }
+  return { id: e.tool_use_id, cat, tool: short, file: short, note: note.join(' · '), turn, at: Date.now(), lines: cap(preview(e, ran.text)) }
 }
 
 function counts(list: Change[]) {
@@ -244,6 +244,44 @@ const tally = (c: Change) => ({ add: c.lines.filter(l => l.op === '+').length, d
 async function reveal($: any, id: string) {
   await update($, sel, () => id)
   await $.ui.open({ id: PANE, title: 'Replay Theater', focus: true as const, closeOnEscape: true as const })
+}
+
+// "14:05" from a millisecond time, in the machine's own zone.
+const clock = (ms: number) => {
+  const d = new Date(ms)
+
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// For a removed line followed by an added one: the words that really changed. A pair
+// that shares too little (under 40%) gets no marks, the whole line is the change.
+function wordMarks(lines: Line[]): Map<number, { pre: string; mid: string; suf: string }> {
+  const out = new Map<number, { pre: string; mid: string; suf: string }>()
+  let i = 0
+  while (i < lines.length) {
+    if (lines[i]!.op !== '-') {
+      i++
+      continue
+    }
+    let d = i
+    while (d < lines.length && lines[d]!.op === '-') d++
+    let a = d
+    while (a < lines.length && lines[a]!.op === '+') a++
+    for (let k = 0; k < Math.min(d - i, a - d); k++) {
+      const x = lines[i + k]!.t
+      const y = lines[d + k]!.t
+      let p = 0
+      while (p < x.length && p < y.length && x[p] === y[p]) p++
+      let q = 0
+      while (q < x.length - p && q < y.length - p && x[x.length - 1 - q] === y[y.length - 1 - q]) q++
+      if (p + q < Math.max(x.length, y.length) * 0.4) continue
+      out.set(i + k, { pre: x.slice(0, p), mid: x.slice(p, x.length - q), suf: x.slice(x.length - q) })
+      out.set(d + k, { pre: y.slice(0, p), mid: y.slice(p, y.length - q), suf: y.slice(y.length - q) })
+    }
+    i = a
+  }
+
+  return out
 }
 
 // The first real words of a prompt: paste wrappers and other tags are dropped.
@@ -340,6 +378,7 @@ async function panel($: any, e: any) {
   const dir = parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : parts.join('/')
   const name = slash >= 0 ? step.file.slice(slash + 1) : step.file
   // Width of the line-number gutter; 0 when this step has no numbers (a Studio call, say).
+  const marks = wordMarks(step.lines)
   const digits = Math.max(0, ...step.lines.map(l => (l.n ? String(l.n).length : 0)))
 
   // The list groups the steps under what you asked, newest first. A window of its rows
@@ -400,25 +439,37 @@ async function panel($: any, e: any) {
         {name}
       </Text>
       <Box flexDirection="row" flexWrap="wrap" gap={2}>
-        <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}`}</Text>
+        <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}${step.at ? ` · ${clock(step.at)}` : ''}`}</Text>
         <Text color={TINT[step.cat]}>{step.cat}</Text>
         <Text dimColor>{`${step.tool}${step.note ? ` · ${step.note}` : ''}`}</Text>
         <Text color="success">{`+${add}`}</Text>
         <Text color="error">{`-${del}`}</Text>
       </Box>
       <Box flexDirection="column" marginTop={1}>
-        {step.lines.map(l => (
-          <Box backgroundColor={l.op === '+' ? 'diffAddedDimmed' : l.op === '-' ? 'diffRemovedDimmed' : undefined}>
-            {digits > 0 && (
-              <Box width={digits + 1}>
-                <Text dimColor>{l.n ? String(l.n).padStart(digits) : ''}</Text>
-              </Box>
-            )}
-            <Text dimColor={l.op === ' ' || l.op === '~' || l.op === '>'} wrap="wrap">
-              {`${l.op === '~' ? ' ' : l.op} ${l.t}`}
-            </Text>
-          </Box>
-        ))}
+        {step.lines.map((l, li) => {
+          const m = marks.get(li)
+
+          return (
+            <Box backgroundColor={l.op === '+' ? 'diffAddedDimmed' : l.op === '-' ? 'diffRemovedDimmed' : undefined}>
+              {digits > 0 && (
+                <Box width={digits + 1}>
+                  <Text dimColor>{l.n ? String(l.n).padStart(digits) : ''}</Text>
+                </Box>
+              )}
+              {m ? (
+                <Text wrap="wrap">
+                  {`${l.op} ${m.pre}`}
+                  <Text backgroundColor={l.op === '+' ? 'diffAddedWord' : 'diffRemovedWord'}>{m.mid}</Text>
+                  {m.suf}
+                </Text>
+              ) : (
+                <Text dimColor={l.op === ' ' || l.op === '~' || l.op === '>'} wrap="wrap">
+                  {`${l.op === '~' ? ' ' : l.op} ${l.t}`}
+                </Text>
+              )}
+            </Box>
+          )
+        })}
         {!step.lines.length && <Text dimColor>(no line changes)</Text>}
       </Box>
     </Box>

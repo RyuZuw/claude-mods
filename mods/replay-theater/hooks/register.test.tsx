@@ -35,12 +35,12 @@ test('records a Windows-path edit and a Studio call, skips a Studio read', async
 
   // Newest first: step 2 (the Studio call) is on show and the panel follows it.
   // "of 2": the Edit and the Studio call counted, the Studio read did not.
-  expect((await ui.find({ type: 'Text', text: /step 2 of/ }))?.text).toBe('step 2 of 2 · live')
+  expect((await ui.find({ type: 'Text', text: /step 2 of/ }))?.text).toMatch(/^step\ 2\ of\ 2\ ·\ live( · \d\d:\d\d)?$/)
   // One press on Older shows step 1, the Edit, its Windows path cut to a relative one.
   await ui.press({ plugin: 'replay-theater', key: 'older' })
   expect((await ui.find({ type: 'Text', text: /^notes$/ }))?.text).toBe('notes')
   expect((await ui.find({ type: 'Text', text: /^Now\.md$/ }))?.text).toBe('Now.md')
-  expect((await ui.find({ type: 'Text', text: /step 1 of/ }))?.text).toBe('step 1 of 2')
+  expect((await ui.find({ type: 'Text', text: /step 1 of/ }))?.text).toMatch(/^step\ 1\ of\ 2( · \d\d:\d\d)?$/)
   await ui.unmount()
 })
 
@@ -62,7 +62,7 @@ test('the panel draws wide and narrow', async ($, on) => {
 
   for (const bodyColumns of [40, 100]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'desktop' })
-    expect((await ui.find({ type: 'Text', text: /step 1 of/ }))?.text).toBe('step 1 of 1 · live')
+    expect((await ui.find({ type: 'Text', text: /step 1 of/ }))?.text).toMatch(/^step\ 1\ of\ 1\ ·\ live( · \d\d:\d\d)?$/)
     await ui.unmount()
   }
 })
