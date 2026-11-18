@@ -15,7 +15,7 @@ History is for the current session only (the last 300 changes).
 - A panel that follows the newest change, with a step list beside the diff (or above it when the panel is narrow).
 - Steps grouped under the prompt that caused them.
 - Three lines of the file around each edit, with real line numbers (files over 1 MB, replace-all edits and CRLF files show the change without context).
-- Per-step `+N -N` counts, and green and red diff backgrounds taken from your theme.
+- Per-step `+N -N` counts and the time of each step, and soft green and red diff backgrounds taken from your theme.
 - Category toggles (Studio, Blender, Vault for `.md`, Scripts for `.py`, `.lua`, `.luau`, `.ts`, `.tsx`, Other) to hide what doesn't matter right now.
 - A Pause button to stop recording.
 - A "↗ Replay" button under every recorded tool call in the chat, which opens the panel on that step.

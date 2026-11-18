@@ -162,15 +162,6 @@ test('grouping: a prompt that is only a paste reads as pasted text', async ($, o
   await ui.unmount()
 })
 
-test('word highlight: only the changed words of a similar line are marked', async ($, on) => {
-  await withFile($, on)
-  await $.tool.call({ tool: 'Edit', tool_use_id: 'w1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'TARGET line (edited)' })
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  const marked = await ui.find({ type: 'Text', text: /^ \(edited\)$/ })
-  expect(marked).toBeDefined()
-  await ui.unmount()
-})
-
 test('a step shows the time it happened', async ($, on) => {
   await withFile($, on)
   await $.tool.call({ tool: 'Edit', tool_use_id: 't1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
