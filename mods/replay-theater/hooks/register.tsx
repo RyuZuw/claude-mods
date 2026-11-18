@@ -26,6 +26,10 @@ const prompts = atom({ plugin: 'replay-theater', key: 'prompts' } as const, [])
 const off = atom({ plugin: 'replay-theater', key: 'off' } as const, [])
 // The step on show, by id; '' follows the newest.
 const sel = atom({ plugin: 'replay-theater', key: 'sel' } as const, '')
+// Prompt groups folded shut in the list, by turn; whether the 3 context lines show; a Clear waiting for a yes.
+const folded = atom({ plugin: 'replay-theater', key: 'folded' } as const, [])
+const context = atom({ plugin: 'replay-theater', key: 'context' } as const, true)
+const confirmClear = atom({ plugin: 'replay-theater', key: 'confirmClear' } as const, false)
 const paused = atom({ plugin: 'replay-theater', key: 'paused' } as const, false)
 // The panel opens by itself once, at the first change; after that only /replay or Close decide.
 const autoOpened = atom({ plugin: 'replay-theater', key: 'autoOpened' } as const, false)
@@ -306,6 +310,9 @@ async function panel($: any, e: any) {
   const hidden = await read($, off)
   const isPaused = await read($, paused)
   const want = await read($, sel)
+  const shut = await read($, folded)
+  const withContext = await read($, context)
+  const asking = await read($, confirmClear)
   const shown = all.filter(c => !hidden.includes(c.cat))
   const total = shown.length
   const order = [...shown].reverse() // newest first
@@ -315,6 +322,12 @@ async function panel($: any, e: any) {
   const n = counts(all)
   const isWide = (e.props.bodyColumns ?? 60) >= WIDE
   const toggleCat = (c: string) => update($, off, l => (l.includes(c) ? l.filter(x => x !== c) : [...l, c]))
+  const clearAll = async () => {
+    await update($, changes, () => [])
+    await update($, sel, () => '')
+    await update($, folded, () => [])
+    await update($, confirmClear, () => false)
+  }
   const sums = shown.reduce((a, c) => ({ add: a.add + tally(c).add, del: a.del + tally(c).del }), { add: 0, del: 0 })
 
   const header = (
@@ -342,7 +355,7 @@ async function panel($: any, e: any) {
 
   // Longer than any panel, clipped to its width: a rule sized to bodyColumns wrapped.
   const rule = (
-    <Text dimColor wrap="truncate-end">
+    <Text dimColor wrap="clip">
       {'─'.repeat(200)}
     </Text>
   )
@@ -363,18 +376,20 @@ async function panel($: any, e: any) {
   const dir = slash > 0 ? tidyDir(step.file.slice(0, slash)) : ''
   const name = slash >= 0 ? step.file.slice(slash + 1) : step.file
   // Width of the line-number gutter; 0 when this step has no numbers (a Studio call, say).
-  const digits = Math.max(0, ...step.lines.map(l => (l.n ? String(l.n).length : 0)))
+  // Context off: only the changed lines of a file step (a Studio call's lines have no numbers and stay).
+  const lines = withContext || !step.lines.some(l => l.n) ? step.lines : step.lines.filter(l => l.op !== ' ' && l.op !== '~')
+  const digits = Math.max(0, ...lines.map(l => (l.n ? String(l.n).length : 0)))
 
   // The list groups the steps under what you asked, newest first. A window of its rows
   // around the current step: tall beside the diff, short above it.
   const asks = await read($, prompts)
   const perTurn = new Map<number, number>()
   for (const c of order) perTurn.set(c.turn, (perTurn.get(c.turn) ?? 0) + 1)
-  const rows: ({ head: string; size: number } | { idx: number })[] = []
+  const rows: ({ head: string; size: number; turn: number } | { idx: number })[] = []
   order.forEach((c, idx) => {
     if (idx === 0 || c.turn !== order[idx - 1]!.turn)
-      rows.push({ head: c.turn >= 0 ? (asks[c.turn] ?? '') : 'before Replay Theater started', size: perTurn.get(c.turn) ?? 0 })
-    rows.push({ idx })
+      rows.push({ head: c.turn >= 0 ? (asks[c.turn] ?? '') : 'before Replay Theater started', size: perTurn.get(c.turn) ?? 0, turn: c.turn })
+    if (!shut.includes(c.turn) || idx === k) rows.push({ idx }) // a folded group still shows the step on show
   })
   const here = rows.findIndex(r => 'idx' in r && r.idx === k)
   const size = isWide ? 14 : 8
@@ -385,10 +400,14 @@ async function panel($: any, e: any) {
     <Box flexDirection="column" {...(isWide ? { width: 36 } : {})}>
       {rows.slice(from, to).map(r => {
         if ('head' in r) {
+          const isShut = shut.includes(r.turn)
+
           return (
-            <Text bold dimColor wrap="truncate-end">
-              {`${r.head ? `“${r.head}”` : '(no prompt)'}${r.size > 1 ? ` · ${r.size} changes` : ''}`}
-            </Text>
+            <Button key={`h${r.turn}`} plain onPress={() => update($, folded, l => (l.includes(r.turn) ? l.filter(x => x !== r.turn) : [...l, r.turn]))}>
+              <Text bold dimColor wrap="truncate-end">
+                {`${isShut ? '▸' : '▾'} ${r.head ? `“${r.head}”` : '(no prompt)'}${r.size > 1 ? ` · ${r.size} changes` : ''}`}
+              </Text>
+            </Button>
           )
         }
         const c = order[r.idx]!
@@ -434,7 +453,7 @@ async function panel($: any, e: any) {
       </Box>
       <Text dimColor>{`step ${total - k} of ${total}${live ? ' · live' : ''}${step.at ? ` · ${clock(step.at)}` : ''}`}</Text>
       <Box flexDirection="column" marginTop={1}>
-        {step.lines.map(l => (
+        {lines.map(l => (
           <Box backgroundColor={l.op === '+' ? 'diffAddedDimmed' : l.op === '-' ? 'diffRemovedDimmed' : undefined}>
             {digits > 0 && (
               <Box width={digits + 1}>
@@ -471,6 +490,12 @@ async function panel($: any, e: any) {
       <Box flexDirection="row" flexWrap="wrap" gap={3} marginTop={1}>
         <Button key="newer" plain hotkey="n" label="▲ Newer" onPress={() => update($, sel, () => (k <= 1 ? '' : order[k - 1]!.id))} />
         <Button key="older" plain hotkey="o" label="▼ Older" autoFocus onPress={() => update($, sel, () => order[Math.min(total - 1, k + 1)]!.id)} />
+        {!live && <Button key="live" plain hotkey="l" label="⏭ Latest" onPress={() => update($, sel, () => '')} />}
+        <Button key="ctx" plain hotkey="c" label={withContext ? 'Context: on' : 'Context: off'} onPress={() => update($, context, v => !v)} />
+        {!asking && <Button key="clear" plain hotkey="x" label="✕ Clear" onPress={() => update($, confirmClear, () => true)} />}
+        {asking && <Text color="warning">{`Clear all ${all.length}?`}</Text>}
+        {asking && <Button key="yes" plain label="Yes, clear" onPress={clearAll} />}
+        {asking && <Button key="no" plain label="No" onPress={() => update($, confirmClear, () => false)} />}
       </Box>
     </Box>
   )

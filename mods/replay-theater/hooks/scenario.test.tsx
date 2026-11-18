@@ -144,7 +144,7 @@ test('grouping: changes sit under the prompt that caused them', async ($, on) =>
   await withFile($, on, 'make the notes better')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'g1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /make the notes better/)).toBe('“make the notes better”')
+  expect(await text(ui, /make the notes better/)).toMatch(/“make the notes better”$/)
   await ui.unmount()
 })
 
@@ -152,7 +152,7 @@ test('grouping: paste wrappers are stripped from the heading', async ($, on) => 
   await withFile($, on, '<pasted_content id="c001">\nfix the lobby sign\n</pasted_content>')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'p1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /lobby sign/)).toBe('“fix the lobby sign”')
+  expect(await text(ui, /lobby sign/)).toMatch(/“fix the lobby sign”$/)
   await ui.unmount()
 })
 
@@ -160,7 +160,7 @@ test('grouping: a prompt that is only a paste reads as pasted text', async ($, o
   await withFile($, on, '<pasted_content id="c001">')
   await $.tool.call({ tool: 'Edit', tool_use_id: 'p2', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await text(ui, /pasted text/)).toBe('“(pasted text)”')
+  expect(await text(ui, /pasted text/)).toMatch(/“\(pasted text\)”$/)
   await ui.unmount()
 })
 
@@ -179,6 +179,52 @@ test('a long temp path is shortened and a group shows its size', async ($, on) =
   await $.tool.call({ tool: 'Edit', tool_use_id: 'd2', file_path: long, old_string: 'fifth line', new_string: 'Y' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await text(ui, /^…\/claude\/scratchpad$/)).toBe('…/claude/scratchpad')
-  expect(await text(ui, /tidy up/)).toBe('“tidy up” · 2 changes')
+  expect(await text(ui, /tidy up/)).toMatch(/“tidy up” · 2 changes$/)
+  await ui.unmount()
+})
+
+test('Latest returns to the newest step and follows it again', async ($, on) => {
+  await mockSession($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ plugin: 'replay-theater', key: 'older' })
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step 4 of 5 · /)
+  await ui.press({ plugin: 'replay-theater', key: 'live' })
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step 5 of 5 · live/)
+  await ui.unmount()
+})
+
+test('Clear asks first, then empties the list', async ($, on) => {
+  await mockSession($, on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ plugin: 'replay-theater', key: 'clear' })
+  expect(await text(ui, /^Clear all 5\?$/)).toBe('Clear all 5?')
+  await ui.press({ plugin: 'replay-theater', key: 'no' })
+  expect(await text(ui, /step \d+ of/)).toMatch(/^step 5 of 5/) // nothing was cleared
+  await ui.press({ plugin: 'replay-theater', key: 'clear' })
+  await ui.press({ plugin: 'replay-theater', key: 'yes' })
+  expect(await text(ui, /No changes yet/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('Context off hides the dim lines and keeps the changes', async ($, on) => {
+  await withFile($, on)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'c1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /intro line/)).toBeDefined()
+  await ui.press({ plugin: 'replay-theater', key: 'ctx' })
+  expect(await text(ui, /intro line/)).toBeUndefined()
+  expect(await text(ui, /^\+ X$/)).toBe('+ X')
+  await ui.unmount()
+})
+
+test('folding a prompt group hides its other steps', async ($, on) => {
+  await withFile($, on, 'two edits')
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'f1', file_path: 'C:\\game\\notes.md', old_string: 'TARGET line', new_string: 'X' })
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'f2', file_path: 'C:\\game\\notes.md', old_string: 'sixth line', new_string: 'Y' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await text(ui, /^notes\.md:5$/)).toBeDefined()
+  await ui.press({ plugin: 'replay-theater', key: 'h0' })
+  expect(await text(ui, /^notes\.md:5$/)).toBeUndefined() // the older step is folded away
+  expect(await text(ui, /^notes\.md:7$/)).toBeDefined() // the one on show stays
   await ui.unmount()
 })

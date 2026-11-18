@@ -17,6 +17,9 @@ declare module 'claude-code' {
       off: string[]
       sel: string
       prompts: string[]
+      folded: number[]
+      context: boolean
+      confirmClear: boolean
       paused: boolean
       autoOpened: boolean
     }
